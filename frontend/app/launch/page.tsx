@@ -65,6 +65,17 @@ export default function LaunchPage() {
     setError(null);
     setResult(null);
     try {
+      // Pre-flight: check user has enough ETH for launchFee + devBuy + gas headroom
+      const gasHeadroom = parseEther("0.0005"); // ~ typical L2 tx gas
+      const required = launchFee + devBuyWei + gasHeadroom;
+      if (bal && bal.value < required) {
+        const need = Number(required) / 1e18;
+        const have = Number(bal.value) / 1e18;
+        throw new Error(
+          `Insufficient ETH: need ~${need.toFixed(4)} (fee ${formatEther(launchFee)} + dev buy ${devBuy} + gas), wallet has ${have.toFixed(4)}. Lower "Developer buy" or top up.`,
+        );
+      }
+
       const supply = SUPPLY.toString();
       const prep = await prepareLaunch({ creator: address, name, symbol, supply });
 
