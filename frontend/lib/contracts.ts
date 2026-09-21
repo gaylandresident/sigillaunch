@@ -1,11 +1,14 @@
 export const CONTRACTS = {
-  burnRegistry:  (process.env.NEXT_PUBLIC_BURN_REGISTRY  ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
-  certificate:   (process.env.NEXT_PUBLIC_CERTIFICATE    ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
-  launchpad:     (process.env.NEXT_PUBLIC_LAUNCHPAD      ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
-  vault:         (process.env.NEXT_PUBLIC_VAULT          ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
-  weth:          (process.env.NEXT_PUBLIC_WETH           ?? "0x7943e237c7F95DA44E0301572D358911207852Fa") as `0x${string}`,
-  dividendRouter:(process.env.NEXT_PUBLIC_DIVIDEND_ROUTER ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
+  burnRegistry:  (process.env.NEXT_PUBLIC_BURN_REGISTRY   ?? "0xe8e62d05f51937647698658f03dfca7e246a43a1") as `0x${string}`,
+  certificate:   (process.env.NEXT_PUBLIC_CERTIFICATE     ?? "0x97d3caec8e581e95d6b1b15e1ead77cd6fac20bc") as `0x${string}`,
+  launchpad:     (process.env.NEXT_PUBLIC_LAUNCHPAD       ?? "0x86c16a2b955be9c779f2691482d3a9af52089a73") as `0x${string}`,
+  vault:         (process.env.NEXT_PUBLIC_VAULT           ?? "0xef611f115764182a318a0dd22e3d4ea4ea4cea87") as `0x${string}`,
+  weth:          (process.env.NEXT_PUBLIC_WETH            ?? "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73") as `0x${string}`,
+  dividendRouter:(process.env.NEXT_PUBLIC_DIVIDEND_ROUTER ?? "0xdef6ccaa27b736aea644f2d6069b1fdae34ad302") as `0x${string}`,
+  sigilToken:    (process.env.NEXT_PUBLIC_SIGIL_TOKEN     ?? "0xfb14980438acc1cdfc45f7de6420c27ef4cc846f") as `0x${string}`,
 };
+
+export const EXPLORER_BASE = process.env.NEXT_PUBLIC_EXPLORER_BASE ?? "https://explorer.robinhood.com";
 
 export const launchpadAbi = [
   {
@@ -90,7 +93,11 @@ export const launchpadAbi = [
   },
 ] as const;
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3001";
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE ??
+  (typeof window !== "undefined" && window.location.hostname !== "localhost"
+    ? "https://sigil-api.fly.dev"
+    : "http://localhost:3001");
 
 export const burnRegistryAbi = [
   {

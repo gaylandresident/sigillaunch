@@ -31,6 +31,16 @@ const EVM_CHAIN_IDS: Record<Exclude<BurnChainId, "solana">, number> = {
 };
 const EVM_DEAD = "0x000000000000000000000000000000000000dEaD" as const;
 
+// MUST match SigilCertificate.SourceChain enum ordering — do NOT derive from
+// SUPPORTED_BURN_CHAINS array order (that array is UI-ordered, not enum-ordered).
+const SOURCE_CHAIN_ENUM: Record<BurnChainId, number> = {
+  solana: 0,
+  ethereum: 1,
+  base: 2,
+  bsc: 3,
+  arbitrum: 4,
+};
+
 type Mode = "here" | "already";
 type Step = "idle" | "burning" | "signing" | "attesting" | "attested" | "claiming" | "done" | "error";
 type DestMode = "unset" | "generate" | "manual" | "connected";
@@ -138,6 +148,8 @@ export default function BurnPage() {
       });
       setAttestation(att);
       setStep("attested");
+      // Auto-trigger step 2 so user doesn't have to click again
+      await claimWithAttestation(att);
     } catch (e: any) {
       setError(e?.shortMessage ?? e?.message ?? String(e));
       setStep("error");
@@ -176,14 +188,15 @@ export default function BurnPage() {
       });
       setAttestation(att);
       setStep("attested");
+      // Auto-trigger step 2
+      await claimWithAttestation(att);
     } catch (e: any) {
       setError(e?.shortMessage ?? e?.message ?? String(e));
       setStep("error");
     }
   }
 
-  async function handleClaim() {
-    if (!attestation) return;
+  async function claimWithAttestation(att: NonNullable<typeof attestation>) {
     setError(null);
     setStep("claiming");
     try {
@@ -198,17 +211,17 @@ export default function BurnPage() {
         functionName: "claim",
         value: parseEther("0.0005"),
         args: [
-          attestation.claim.recipient,
-          SUPPORTED_BURN_CHAINS.findIndex((c) => c.id === chain),
-          attestation.claim.sourceToken.startsWith("0x")
-            ? (attestation.claim.sourceToken as `0x${string}`)
-            : (("0x" + attestation.claim.sourceToken.padStart(40, "0")) as `0x${string}`),
-          BigInt(attestation.claim.amount),
-          BigInt(attestation.claim.usdValueAtBurn),
-          BigInt(attestation.claim.burnBlock),
-          attestation.claim.burnTxHash,
+          att.claim.recipient,
+          SOURCE_CHAIN_ENUM[chain],
+          att.claim.sourceToken.startsWith("0x")
+            ? (att.claim.sourceToken as `0x${string}`)
+            : (("0x" + att.claim.sourceToken.padStart(40, "0")) as `0x${string}`),
+          BigInt(att.claim.amount),
+          BigInt(att.claim.usdValueAtBurn),
+          BigInt(att.claim.burnBlock),
+          att.claim.burnTxHash,
           empty as any,
-          attestation.attestation,
+          att.attestation,
         ],
       });
       setStep("done");
@@ -217,6 +230,11 @@ export default function BurnPage() {
       setError(e?.shortMessage ?? e?.message ?? String(e));
       setStep("error");
     }
+  }
+
+  async function handleClaim() {
+    if (!attestation) return;
+    await claimWithAttestation(attestation);
   }
 
   return (
