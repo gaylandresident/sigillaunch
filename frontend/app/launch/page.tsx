@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useAccount, useBalance, useReadContract, useWriteContract } from "wagmi";
+import { useAccount, useBalance, usePublicClient, useReadContract, useWriteContract } from "wagmi";
 import { motion, AnimatePresence } from "framer-motion";
-import { parseEther, formatEther } from "viem";
+import { encodeAbiParameters, keccak256, parseEther, formatEther } from "viem";
 import { CONTRACTS, launchpadAbi } from "@/lib/contracts";
 import { prepareLaunch } from "@/lib/api";
 
@@ -16,6 +16,7 @@ const SUPPLY = 1_000_000_000n * 10n ** 18n;
 export default function LaunchPage() {
   const { address } = useAccount();
   const { data: bal } = useBalance({ address });
+  const publicClient = usePublicClient();
   const { writeContractAsync, isPending } = useWriteContract();
 
   const [name, setName] = useState("");
@@ -66,7 +67,7 @@ export default function LaunchPage() {
     setResult(null);
     try {
       // Pre-flight: check user has enough ETH for launchFee + devBuy + gas headroom
-      const gasHeadroom = parseEther("0.0005"); // ~ typical L2 tx gas
+      const gasHeadroom = parseEther("0.001"); // ~ 2 txs worth on L2
       const required = launchFee + devBuyWei + gasHeadroom;
       if (bal && bal.value < required) {
         const need = Number(required) / 1e18;
@@ -98,13 +99,14 @@ export default function LaunchPage() {
       const descHash = prep.zsa.actions[0]?.assetDescHash;
       if (!descHash) throw new Error("descHash missing");
 
-      const totalValue = launchFee + devBuyWei;
-
+      // ── STEP 1: createLaunch (pays launchFee only) ──
+      // ALL msg.value here becomes creator fee sent to DividendRouter.
+      // Do NOT include devBuy in this value — it would be lost.
       const tx = await writeContractAsync({
         address: CONTRACTS.launchpad,
         abi: launchpadAbi,
         functionName: "createLaunch",
-        value: totalValue,
+        value: launchFee,
         args: [
           name,
           symbol,
@@ -117,6 +119,43 @@ export default function LaunchPage() {
         ],
       });
       setResult({ tx });
+
+      // ── STEP 2: if devBuy > 0, wait for launch tx then buy() as separate tx ──
+      if (devBuyWei > 0n && publicClient) {
+        try {
+          const receipt = await publicClient.waitForTransactionReceipt({ hash: tx as `0x${string}` });
+          // Recover token address from launchId (deterministic from contract logic)
+          // launchId = keccak256(abi.encode(token, chainid)) — we need token from receipt logs
+          // Easier: derive launchId by scanning LaunchCreated event topics
+          // But wagmi ABI parsing gets ugly; simplest is to read paginatedLaunches after tx
+          const launchCount = await publicClient.readContract({
+            address: CONTRACTS.launchpad,
+            abi: launchpadAbi,
+            functionName: "launchCount",
+          }) as bigint;
+          const ids = await publicClient.readContract({
+            address: CONTRACTS.launchpad,
+            abi: launchpadAbi,
+            functionName: "paginatedLaunches",
+            args: [launchCount - 1n, 1n],
+          }) as `0x${string}`[];
+          if (ids.length > 0) {
+            const buyTx = await writeContractAsync({
+              address: CONTRACTS.launchpad,
+              abi: launchpadAbi,
+              functionName: "buy",
+              value: devBuyWei,
+              args: [ids[0], 0n],
+            });
+            setResult({ tx: `${tx} | dev-buy: ${buyTx}` });
+          }
+        } catch (buyErr: any) {
+          // Launch succeeded; devBuy failed. Show as warning, not error.
+          setError(
+            `Launch OK (${tx.slice(0, 12)}…) but dev-buy failed: ${buyErr?.shortMessage ?? buyErr?.message}. You can buy manually on the token page.`,
+          );
+        }
+      }
     } catch (e: any) {
       setError(e?.shortMessage ?? e?.message ?? String(e));
     }

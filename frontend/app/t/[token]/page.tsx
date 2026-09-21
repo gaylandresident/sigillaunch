@@ -17,6 +17,9 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const ROBINHOOD_CHAIN_ID = 4663n;
 
+// Legacy launchpad kept live so tokens launched before 2026-09-21 remain tradable.
+const LEGACY_LAUNCHPAD = "0x86c16a2b955be9c779f2691482d3a9af52089a73" as `0x${string}`;
+
 export default function TokenPage() {
   const params = useParams<{ token: string }>();
   const tokenParam = params?.token ?? "";
@@ -42,17 +45,29 @@ export default function TokenPage() {
     );
   }, [token]);
 
-  const { data: launch } = useReadContract({
+  // Try new launchpad first
+  const { data: launchNew } = useReadContract({
     address: CONTRACTS.launchpad,
     abi: launchpadAbi,
     functionName: "launches",
     args: launchId ? [launchId] : undefined,
     query: { enabled: !!launchId },
   });
+  // Fallback: legacy launchpad
+  const { data: launchLegacy } = useReadContract({
+    address: LEGACY_LAUNCHPAD,
+    abi: launchpadAbi,
+    functionName: "launches",
+    args: launchId ? [launchId] : undefined,
+    query: { enabled: !!launchId },
+  });
 
-  const raw = launch as
-    | readonly [`0x${string}`, `0x${string}`, bigint, bigint, bigint, bigint, string]
-    | undefined;
+  const rawNew = launchNew as readonly [`0x${string}`, `0x${string}`, bigint, bigint, bigint, bigint, string] | undefined;
+  const rawLegacy = launchLegacy as readonly [`0x${string}`, `0x${string}`, bigint, bigint, bigint, bigint, string] | undefined;
+  const useLegacy = (!rawNew || rawNew[0] === "0x0000000000000000000000000000000000000000") &&
+                    rawLegacy && rawLegacy[0] !== "0x0000000000000000000000000000000000000000";
+  const raw = useLegacy ? rawLegacy : rawNew;
+  const activeLaunchpad = useLegacy ? LEGACY_LAUNCHPAD : CONTRACTS.launchpad;
 
   if (!isAddress(token)) {
     return (
@@ -136,7 +151,7 @@ export default function TokenPage() {
 
       if (mode === "buy") {
         const tx = await writeContractAsync({
-          address: CONTRACTS.launchpad,
+          address: activeLaunchpad,
           abi: launchpadAbi,
           functionName: "buy",
           value: inputWei,
@@ -149,10 +164,10 @@ export default function TokenPage() {
           address: token,
           abi: erc20Abi,
           functionName: "approve",
-          args: [CONTRACTS.launchpad, inputWei],
+          args: [activeLaunchpad, inputWei],
         });
         const tx = await writeContractAsync({
-          address: CONTRACTS.launchpad,
+          address: activeLaunchpad,
           abi: launchpadAbi,
           functionName: "sell",
           args: [launchId, inputWei, 0n],
