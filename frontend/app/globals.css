@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
+
+@layer base {
+  html,
+  body {
+    background-color: theme("colors.ink.DEFAULT");
+    color: theme("colors.bone.DEFAULT");
+    font-family: theme("fontFamily.sans");
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: theme("colors.ember.DEFAULT");
+    color: theme("colors.ink.DEFAULT");
+  }
+}
+
+@layer components {
+  .hairline {
+    background-image: linear-gradient(
+      to right,
+      transparent,
+      theme("colors.bone.600") 20%,
+      theme("colors.bone.600") 80%,
+      transparent
+    );
+    height: 1px;
+  }
+  .kicker {
+    @apply font-mono uppercase text-[0.7rem] tracking-widest2 text-bone-500;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-2 rounded-none border border-ember px-6 py-3 font-mono text-sm uppercase tracking-widest2 text-ember transition-all hover:bg-ember hover:text-ink;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-none border border-bone-600 px-6 py-3 font-mono text-sm uppercase tracking-widest2 text-bone-400 transition-all hover:border-bone hover:text-bone;
+  }
+  .card {
+    @apply relative border border-bone-600/40 bg-ink-800/50 backdrop-blur-sm;
+  }
+  .card-hover {
+    @apply transition-all hover:border-ember/60 hover:bg-ink-700/50;
+  }
+}
+
+/* subtle grain overlay across app */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}

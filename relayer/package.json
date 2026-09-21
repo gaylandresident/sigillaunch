@@ -1,0 +1,29 @@
+{
+  "name": "@sigil/relayer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@zcashfoundation/lightwalletd-client": "^0.1.0",
+    "@bitcoinerlab/secp256k1": "^1.1.1",
+    "bip32": "^4.0.0",
+    "bip39": "^3.1.0",
+    "blake2b": "^2.1.4",
+    "cbor": "^9.0.2",
+    "dotenv": "^16.4.5",
+    "grpc-web": "^1.5.0",
+    "pino": "^9.5.0",
+    "postgres": "^3.4.5",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.0"
+  }
+}

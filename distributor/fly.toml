@@ -1,0 +1,26 @@
+app = "sigil-distributor"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# No public HTTP service — worker only.
+[processes]
+  worker = "npm start"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
+  processes = ["worker"]
+
+[env]
+  ROBINHOOD_RPC_URL = "https://robinhood-mainnet.g.alchemy.com/v2/alch_mkS7FTQnzPCIou3V7eI3c"
+  WETH_ADDRESS = "0x7943e237c7F95DA44E0301572D358911207852Fa"
+  DIVIDEND_ROUTER_ADDRESS = "0x0000000000000000000000000000000000000000"
+  REWARD_VAULT_ADDRESS = "0x0000000000000000000000000000000000000000"
+  TICK_INTERVAL_MS = "600000"
+  MIN_FLUSH_AMOUNT = "1000000"
+  LOG_LEVEL = "info"
+
+# NOTE: set BOT_PRIVATE_KEY via `fly secrets set` — NEVER put it here.

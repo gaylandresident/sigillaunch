@@ -1,0 +1,33 @@
+app = "sigillaunch"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512
+
+[env]
+  NEXT_PUBLIC_API_BASE = "https://api.sigillaunch.com"
+  NEXT_PUBLIC_ROBINHOOD_RPC_URL = "https://robinhood-mainnet.g.alchemy.com/v2/alch_mkS7FTQnzPCIou3V7eI3c"
+  NEXT_PUBLIC_weth = "0x7943e237c7F95DA44E0301572D358911207852Fa"
+  NEXT_PUBLIC_BURN_REGISTRY = "0x0000000000000000000000000000000000000000"
+  NEXT_PUBLIC_CERTIFICATE = "0x0000000000000000000000000000000000000000"
+  NEXT_PUBLIC_LAUNCHPAD = "0x0000000000000000000000000000000000000000"
+  NEXT_PUBLIC_VAULT = "0x0000000000000000000000000000000000000000"
+  NEXT_PUBLIC_WC_PROJECT_ID = "sigil-dev"
