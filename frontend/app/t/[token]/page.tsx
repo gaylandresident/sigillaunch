@@ -17,8 +17,11 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const ROBINHOOD_CHAIN_ID = 4663n;
 
-// Legacy launchpad kept live so tokens launched before 2026-09-21 remain tradable.
-const LEGACY_LAUNCHPAD = "0x86c16a2b955be9c779f2691482d3a9af52089a73" as `0x${string}`;
+// Previous launchpads still tradable (kept for continuity after each redeploy)
+const LEGACY_LAUNCHPADS: `0x${string}`[] = [
+  "0xb82d1356e77e301041add2ef53bbcaf428b5be53",
+  "0x86c16a2b955be9c779f2691482d3a9af52089a73",
+];
 
 export default function TokenPage() {
   const params = useParams<{ token: string }>();
@@ -45,7 +48,7 @@ export default function TokenPage() {
     );
   }, [token]);
 
-  // Try new launchpad first
+  // Try current launchpad first, then legacies
   const { data: launchNew } = useReadContract({
     address: CONTRACTS.launchpad,
     abi: launchpadAbi,
@@ -53,21 +56,31 @@ export default function TokenPage() {
     args: launchId ? [launchId] : undefined,
     query: { enabled: !!launchId },
   });
-  // Fallback: legacy launchpad
-  const { data: launchLegacy } = useReadContract({
-    address: LEGACY_LAUNCHPAD,
+  const { data: launchL0 } = useReadContract({
+    address: LEGACY_LAUNCHPADS[0],
+    abi: launchpadAbi,
+    functionName: "launches",
+    args: launchId ? [launchId] : undefined,
+    query: { enabled: !!launchId },
+  });
+  const { data: launchL1 } = useReadContract({
+    address: LEGACY_LAUNCHPADS[1],
     abi: launchpadAbi,
     functionName: "launches",
     args: launchId ? [launchId] : undefined,
     query: { enabled: !!launchId },
   });
 
-  const rawNew = launchNew as readonly [`0x${string}`, `0x${string}`, bigint, bigint, bigint, bigint, string] | undefined;
-  const rawLegacy = launchLegacy as readonly [`0x${string}`, `0x${string}`, bigint, bigint, bigint, bigint, string] | undefined;
-  const useLegacy = (!rawNew || rawNew[0] === "0x0000000000000000000000000000000000000000") &&
-                    rawLegacy && rawLegacy[0] !== "0x0000000000000000000000000000000000000000";
-  const raw = useLegacy ? rawLegacy : rawNew;
-  const activeLaunchpad = useLegacy ? LEGACY_LAUNCHPAD : CONTRACTS.launchpad;
+  type Raw = readonly [`0x${string}`, `0x${string}`, bigint, bigint, bigint, bigint, string] | undefined;
+  const zero = "0x0000000000000000000000000000000000000000";
+  const candidates: { pad: `0x${string}`; raw: Raw }[] = [
+    { pad: CONTRACTS.launchpad, raw: launchNew as Raw },
+    { pad: LEGACY_LAUNCHPADS[0], raw: launchL0 as Raw },
+    { pad: LEGACY_LAUNCHPADS[1], raw: launchL1 as Raw },
+  ];
+  const found = candidates.find((c) => c.raw && c.raw[0].toLowerCase() !== zero);
+  const raw = found?.raw;
+  const activeLaunchpad = found?.pad ?? CONTRACTS.launchpad;
 
   if (!isAddress(token)) {
     return (

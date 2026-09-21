@@ -99,14 +99,15 @@ export default function LaunchPage() {
       const descHash = prep.zsa.actions[0]?.assetDescHash;
       if (!descHash) throw new Error("descHash missing");
 
-      // ── STEP 1: createLaunch (pays launchFee only) ──
-      // ALL msg.value here becomes creator fee sent to DividendRouter.
-      // Do NOT include devBuy in this value — it would be lost.
+      // Single-tx atomic launch + dev buy.
+      // Contract splits msg.value: launchFee → DividendRouter, remainder → buy
+      // routed through the bonding curve, tokens delivered to msg.sender.
+      const totalValue = launchFee + devBuyWei;
       const tx = await writeContractAsync({
         address: CONTRACTS.launchpad,
         abi: launchpadAbi,
         functionName: "createLaunch",
-        value: launchFee,
+        value: totalValue,
         args: [
           name,
           symbol,
@@ -119,43 +120,6 @@ export default function LaunchPage() {
         ],
       });
       setResult({ tx });
-
-      // ── STEP 2: if devBuy > 0, wait for launch tx then buy() as separate tx ──
-      if (devBuyWei > 0n && publicClient) {
-        try {
-          const receipt = await publicClient.waitForTransactionReceipt({ hash: tx as `0x${string}` });
-          // Recover token address from launchId (deterministic from contract logic)
-          // launchId = keccak256(abi.encode(token, chainid)) — we need token from receipt logs
-          // Easier: derive launchId by scanning LaunchCreated event topics
-          // But wagmi ABI parsing gets ugly; simplest is to read paginatedLaunches after tx
-          const launchCount = await publicClient.readContract({
-            address: CONTRACTS.launchpad,
-            abi: launchpadAbi,
-            functionName: "launchCount",
-          }) as bigint;
-          const ids = await publicClient.readContract({
-            address: CONTRACTS.launchpad,
-            abi: launchpadAbi,
-            functionName: "paginatedLaunches",
-            args: [launchCount - 1n, 1n],
-          }) as `0x${string}`[];
-          if (ids.length > 0) {
-            const buyTx = await writeContractAsync({
-              address: CONTRACTS.launchpad,
-              abi: launchpadAbi,
-              functionName: "buy",
-              value: devBuyWei,
-              args: [ids[0], 0n],
-            });
-            setResult({ tx: `${tx} | dev-buy: ${buyTx}` });
-          }
-        } catch (buyErr: any) {
-          // Launch succeeded; devBuy failed. Show as warning, not error.
-          setError(
-            `Launch OK (${tx.slice(0, 12)}…) but dev-buy failed: ${buyErr?.shortMessage ?? buyErr?.message}. You can buy manually on the token page.`,
-          );
-        }
-      }
     } catch (e: any) {
       setError(e?.shortMessage ?? e?.message ?? String(e));
     }

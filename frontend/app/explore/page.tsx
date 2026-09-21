@@ -6,24 +6,34 @@ import { motion } from "framer-motion";
 import { formatEther } from "viem";
 import { CONTRACTS, launchpadAbi } from "@/lib/contracts";
 
-const LEGACY_LAUNCHPAD = "0x86c16a2b955be9c779f2691482d3a9af52089a73" as `0x${string}`;
+// Previous launchpad deploys — still queried so old tokens remain discoverable
+const LEGACY_LAUNCHPADS: `0x${string}`[] = [
+  "0xb82d1356e77e301041add2ef53bbcaf428b5be53", // v2 (no atomic dev-buy)
+  "0x86c16a2b955be9c779f2691482d3a9af52089a73", // v1 (dev-buy went to router)
+];
 
 export default function ExplorePage() {
-  // Read both launchpads and merge
+  // Read current + all legacy launchpads and merge
   const { data: countNew } = useReadContract({
     address: CONTRACTS.launchpad,
     abi: launchpadAbi,
     functionName: "launchCount",
   });
-  const { data: countLegacy } = useReadContract({
-    address: LEGACY_LAUNCHPAD,
+  const { data: countL0 } = useReadContract({
+    address: LEGACY_LAUNCHPADS[0],
+    abi: launchpadAbi,
+    functionName: "launchCount",
+  });
+  const { data: countL1 } = useReadContract({
+    address: LEGACY_LAUNCHPADS[1],
     abi: launchpadAbi,
     functionName: "launchCount",
   });
 
   const totalNew = Number(countNew ?? 0n);
-  const totalLegacy = Number(countLegacy ?? 0n);
-  const total = totalNew + totalLegacy;
+  const totalL0 = Number(countL0 ?? 0n);
+  const totalL1 = Number(countL1 ?? 0n);
+  const total = totalNew + totalL0 + totalL1;
 
   const { data: idsNew } = useReadContract({
     address: CONTRACTS.launchpad,
@@ -32,17 +42,25 @@ export default function ExplorePage() {
     args: [0n, 60n],
     query: { enabled: totalNew > 0 },
   });
-  const { data: idsLegacy } = useReadContract({
-    address: LEGACY_LAUNCHPAD,
+  const { data: idsL0 } = useReadContract({
+    address: LEGACY_LAUNCHPADS[0],
     abi: launchpadAbi,
     functionName: "paginatedLaunches",
     args: [0n, 60n],
-    query: { enabled: totalLegacy > 0 },
+    query: { enabled: totalL0 > 0 },
+  });
+  const { data: idsL1 } = useReadContract({
+    address: LEGACY_LAUNCHPADS[1],
+    abi: launchpadAbi,
+    functionName: "paginatedLaunches",
+    args: [0n, 60n],
+    query: { enabled: totalL1 > 0 },
   });
 
   const merged: { id: `0x${string}`; pad: `0x${string}` }[] = [
     ...(((idsNew as `0x${string}`[] | undefined) ?? []).map((id) => ({ id, pad: CONTRACTS.launchpad }))),
-    ...(((idsLegacy as `0x${string}`[] | undefined) ?? []).map((id) => ({ id, pad: LEGACY_LAUNCHPAD }))),
+    ...(((idsL0 as `0x${string}`[] | undefined) ?? []).map((id) => ({ id, pad: LEGACY_LAUNCHPADS[0] }))),
+    ...(((idsL1 as `0x${string}`[] | undefined) ?? []).map((id) => ({ id, pad: LEGACY_LAUNCHPADS[1] }))),
   ];
   const launchIds = merged.map((m) => m.id);
 

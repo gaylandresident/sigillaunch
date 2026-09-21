@@ -180,15 +180,47 @@ contract SigilLaunchpad is Ownable, ReentrancyGuard {
         });
         allLaunchIds.push(launchId);
 
-        if (msg.value > 0) {
-            weth.deposit{value: msg.value}();
-            weth.transfer(dividendRouter, msg.value);
-        }
+        // Route the mandatory launch fee to the DividendRouter as WETH.
+        weth.deposit{value: launchFee}();
+        weth.transfer(dividendRouter, launchFee);
 
         emit LaunchCreated(launchId, token, msg.sender, name, symbol, phantomWethReserve, metadataURI);
         if (zsaAssetBase != bytes32(0)) {
             emit LaunchZsaBound(launchId, zsaAssetBase, zsaDescHash, zsaIssuer, zsaAuthSig);
         }
+
+        // Anything above launchFee is the creator's atomic dev-buy: route it
+        // through the same bonding curve as any other trade so the creator
+        // actually receives tokens in the SAME transaction.
+        uint256 devBuyEth = msg.value - launchFee;
+        if (devBuyEth > 0) {
+            _internalBuy(launchId, devBuyEth, msg.sender);
+        }
+    }
+
+    /// @dev Same math as public buy(), but with an explicit `to` recipient
+    ///      (needed so createLaunch can atomically buy on behalf of msg.sender).
+    function _internalBuy(bytes32 launchId, uint256 ethIn, address to) internal returns (uint256 tokenOut) {
+        Launch storage l = launches[launchId];
+
+        weth.deposit{value: ethIn}();
+
+        uint256 feeBps = _currentFeeBps(l.createdAt);
+        uint256 fee = (ethIn * feeBps) / BPS_DENOM;
+        _routeFee(l.creator, fee);
+
+        uint256 wethNet = ethIn - fee;
+        uint256 newWeth = l.wethReserve + wethNet;
+        uint256 newToken = l.k / newWeth;
+        tokenOut = l.tokenReserve - newToken;
+
+        l.wethReserve = newWeth;
+        l.tokenReserve = newToken;
+        wethRaised[launchId] += wethNet;
+        _maybeGraduate(launchId);
+
+        IERC20(l.token).safeTransfer(to, tokenOut);
+        emit Traded(launchId, to, true, ethIn, tokenOut, fee);
     }
 
     // ---------- Trade ----------
