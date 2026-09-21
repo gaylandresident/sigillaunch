@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useAccount, useBalance, useReadContract, useWriteContract } from "wagmi";
-import { useMemo, useState } from "react";
+import { useAccount, useBalance, usePublicClient, useReadContract, useWriteContract } from "wagmi";
+import { useEffect, useMemo, useState } from "react";
 import {
   encodeAbiParameters,
   keccak256,
@@ -32,6 +32,8 @@ export default function TokenPage() {
   const { data: ethBal } = useBalance({ address });
   const { data: tokBal } = useBalance({ address, token: isAddress(token) ? token : undefined });
   const { writeContractAsync, isPending } = useWriteContract();
+  const publicClient = usePublicClient();
+  const [trades, setTrades] = useState<{ ts: number; price: number; isBuy: boolean }[]>([]);
 
   const [mode, setMode] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
@@ -81,6 +83,65 @@ export default function TokenPage() {
   const found = candidates.find((c) => c.raw && c.raw[0].toLowerCase() !== zero);
   const raw = found?.raw;
   const activeLaunchpad = found?.pad ?? CONTRACTS.launchpad;
+
+  const { data: wethRaised } = useReadContract({
+    address: activeLaunchpad,
+    abi: launchpadAbi,
+    functionName: "wethRaised",
+    args: launchId ? [launchId] : undefined,
+    query: { enabled: !!launchId && !!found, refetchInterval: 15_000 },
+  });
+
+  // Fetch recent Traded events to render the price chart
+  useEffect(() => {
+    if (!publicClient || !launchId || !found) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const latest = await publicClient.getBlockNumber();
+        // Robinhood Chain's block time is ~2s → 50k blocks ≈ 28 hours of history.
+        // Keep small to stay under Alchemy's log-range cap.
+        const fromBlock = latest > 50_000n ? latest - 50_000n : 0n;
+        const logs = await publicClient.getLogs({
+          address: activeLaunchpad,
+          event: {
+            type: "event",
+            name: "Traded",
+            inputs: [
+              { name: "launchId", type: "bytes32", indexed: true },
+              { name: "trader", type: "address", indexed: true },
+              { name: "isBuy", type: "bool", indexed: false },
+              { name: "wethAmount", type: "uint256", indexed: false },
+              { name: "tokenAmount", type: "uint256", indexed: false },
+              { name: "fee", type: "uint256", indexed: false },
+            ],
+          },
+          args: { launchId },
+          fromBlock,
+          toBlock: "latest",
+        });
+        const rows: { ts: number; price: number; isBuy: boolean }[] = [];
+        // Batch-fetch block timestamps
+        const blockNums = [...new Set(logs.map((l) => l.blockNumber))];
+        const blocks = await Promise.all(blockNums.map((n) => publicClient.getBlock({ blockNumber: n })));
+        const tsByBlock = new Map(blocks.map((b) => [b.number, Number(b.timestamp)]));
+        for (const log of logs) {
+          const { wethAmount, tokenAmount, isBuy } = log.args as any;
+          if (!wethAmount || !tokenAmount) continue;
+          // tick price in ETH per token
+          const price = Number(wethAmount) / Number(tokenAmount);
+          rows.push({ ts: tsByBlock.get(log.blockNumber) ?? 0, price, isBuy: !!isBuy });
+        }
+        rows.sort((a, b) => a.ts - b.ts);
+        if (!cancelled) setTrades(rows.slice(-100));
+      } catch (e) {
+        // silent fail — chart is optional
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [publicClient, launchId?.toString(), activeLaunchpad]);
 
   if (!isAddress(token)) {
     return (
@@ -220,15 +281,64 @@ export default function TokenPage() {
           </div>
 
           {meta.description && (
-            <p className="mt-8 max-w-2xl text-lg text-bone-400">{meta.description}</p>
+            <p className="mt-6 max-w-2xl text-bone-400">{meta.description}</p>
           )}
 
-          <dl className="mt-12 grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4">
-            <Stat k="Price" v={`${formatEther(priceWei).slice(0, 10)} ETH`} />
-            <Stat k="Market cap" v={`${Number(marketCapEth).toLocaleString()} ETH`} />
-            <Stat k="Liquidity" v={`${formatEther(wethReserve).slice(0, 8)} ETH`} />
-            <Stat k="Created" v={new Date(Number(createdAt) * 1000).toLocaleDateString()} />
-          </dl>
+          {/* Big price + FDV row */}
+          <div className="mt-10 grid grid-cols-2 gap-6 sm:grid-cols-3">
+            <div>
+              <p className="kicker">Price</p>
+              <p className="mt-1 font-mono text-3xl text-bone">
+                {formatEther(priceWei).slice(0, 10)}
+              </p>
+              <p className="font-mono text-xs text-bone-500">ETH per {meta.symbol}</p>
+            </div>
+            <div>
+              <p className="kicker">Market cap (FDV)</p>
+              <p className="mt-1 font-mono text-3xl text-ember">
+                {Number(marketCapEth).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </p>
+              <p className="font-mono text-xs text-bone-500">ETH</p>
+            </div>
+            <div>
+              <p className="kicker">Liquidity</p>
+              <p className="mt-1 font-mono text-3xl text-bone">
+                {formatEther(wethReserve).slice(0, 6)}
+              </p>
+              <p className="font-mono text-xs text-bone-500">ETH in curve</p>
+            </div>
+          </div>
+
+          {/* Graduation progress */}
+          <div className="mt-10">
+            <div className="mb-2 flex items-baseline justify-between">
+              <p className="kicker">Graduation progress</p>
+              <p className="font-mono text-xs text-bone-500">
+                {formatEther((wethRaised as bigint) ?? 0n).slice(0, 6)} / 4.2 ETH
+              </p>
+            </div>
+            <div className="relative h-2 w-full overflow-hidden bg-ink-700">
+              <div
+                className="absolute inset-y-0 left-0 bg-gradient-to-r from-ember to-ember-400 transition-all"
+                style={{
+                  width: `${Math.min(100, (Number(((wethRaised as bigint) ?? 0n) * 10000n / parseEther("4.2")) / 100))}%`,
+                }}
+              />
+            </div>
+            <p className="mt-2 font-mono text-[0.65rem] uppercase tracking-widest2 text-bone-600">
+              At 4.2 ETH raised, liquidity graduates & becomes permanent
+            </p>
+          </div>
+
+          {/* Price chart */}
+          <div className="mt-10">
+            <p className="kicker mb-4">Price (last {trades.length} trades)</p>
+            <PriceChart trades={trades} />
+          </div>
+
+          <p className="mt-6 font-mono text-[0.65rem] uppercase tracking-widest2 text-bone-600">
+            Created {new Date(Number(createdAt) * 1000).toLocaleString()}
+          </p>
 
           <div className="mt-8 flex gap-4 font-mono text-xs">
             <a
@@ -382,11 +492,75 @@ export default function TokenPage() {
   );
 }
 
-function Stat({ k, v }: { k: string; v: string }) {
+function PriceChart({ trades }: { trades: { ts: number; price: number; isBuy: boolean }[] }) {
+  if (trades.length === 0) {
+    return (
+      <div className="flex h-40 items-center justify-center border border-bone-600/30">
+        <p className="font-serif text-sm italic text-bone-500">No trades yet — be the first.</p>
+      </div>
+    );
+  }
+  const W = 800;
+  const H = 200;
+  const pad = { l: 8, r: 8, t: 12, b: 20 };
+  const iw = W - pad.l - pad.r;
+  const ih = H - pad.t - pad.b;
+  const prices = trades.map((t) => t.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min || max || 1;
+  const t0 = trades[0].ts;
+  const tN = trades[trades.length - 1].ts;
+  const tSpan = tN - t0 || 1;
+  const xy = (t: { ts: number; price: number }) => ({
+    x: pad.l + ((t.ts - t0) / tSpan) * iw,
+    y: pad.t + ih - ((t.price - min) / range) * ih,
+  });
+  const line = trades
+    .map((t, i) => {
+      const p = xy(t);
+      return `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+    })
+    .join(" ");
+  const area = `M ${pad.l} ${pad.t + ih} ` +
+    trades.map((t) => { const p = xy(t); return `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`; }).join(" ") +
+    ` L ${pad.l + iw} ${pad.t + ih} Z`;
+  const first = trades[0].price;
+  const last = trades[trades.length - 1].price;
+  const changePct = ((last - first) / (first || 1)) * 100;
+  const up = changePct >= 0;
   return (
-    <div>
-      <p className="kicker">{k}</p>
-      <p className="mt-1 font-mono text-sm text-bone">{v}</p>
+    <div className="border border-bone-600/30 bg-ink-800/40 p-4">
+      <div className="mb-3 flex items-baseline justify-between">
+        <p className="font-mono text-xs text-bone-500">
+          {trades.length} trades · {new Date(t0 * 1000).toLocaleDateString()} → now
+        </p>
+        <p className={`font-mono text-sm ${up ? "text-ember" : "text-crimson"}`}>
+          {up ? "▲" : "▼"} {changePct.toFixed(2)}%
+        </p>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-40 w-full">
+        <defs>
+          <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={up ? "#d97706" : "#ef4444"} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={up ? "#d97706" : "#ef4444"} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#grad)" />
+        <path d={line} stroke={up ? "#d97706" : "#ef4444"} strokeWidth="1.5" fill="none" />
+        {trades.map((t, i) => {
+          const p = xy(t);
+          return (
+            <circle
+              key={i}
+              cx={p.x}
+              cy={p.y}
+              r={1.5}
+              fill={t.isBuy ? "#d97706" : "#ef4444"}
+            />
+          );
+        })}
+      </svg>
     </div>
   );
 }

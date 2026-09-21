@@ -91,6 +91,32 @@ export const launchpadAbi = [
     inputs: [],
     outputs: [{ type: "uint256" }],
   },
+  {
+    type: "function",
+    name: "wethRaised",
+    stateMutability: "view",
+    inputs: [{ type: "bytes32" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "GRADUATION_THRESHOLD",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "event",
+    name: "Traded",
+    inputs: [
+      { name: "launchId", type: "bytes32", indexed: true },
+      { name: "trader", type: "address", indexed: true },
+      { name: "isBuy", type: "bool", indexed: false },
+      { name: "wethAmount", type: "uint256", indexed: false },
+      { name: "tokenAmount", type: "uint256", indexed: false },
+      { name: "fee", type: "uint256", indexed: false },
+    ],
+  },
 ] as const;
 
 export const API_BASE =
