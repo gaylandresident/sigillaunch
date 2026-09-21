@@ -28,6 +28,7 @@ const EVM_CHAIN_IDS: Record<Exclude<BurnChainId, "solana">, number> = {
   base: 8453,
   bsc: 56,
   arbitrum: 42161,
+  robinhood: 4663,
 };
 const EVM_DEAD = "0x000000000000000000000000000000000000dEaD" as const;
 
@@ -39,6 +40,7 @@ const SOURCE_CHAIN_ENUM: Record<BurnChainId, number> = {
   base: 2,
   bsc: 3,
   arbitrum: 4,
+  robinhood: 6, // PROTOCOL=5 is reserved for DividendRouter self-burns
 };
 
 type Mode = "here" | "already";

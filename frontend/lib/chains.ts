@@ -18,6 +18,7 @@ export const robinhoodChain = defineChain({
 });
 
 export const SUPPORTED_BURN_CHAINS = [
+  { id: "robinhood", name: "Robinhood", ticker: "ETH", tint: "#d97706" },
   { id: "ethereum",  name: "Ethereum", ticker: "ETH", tint: "#8b93a7" },
   { id: "solana",    name: "Solana",   ticker: "SOL", tint: "#9945ff" },
   { id: "base",      name: "Base",     ticker: "BASE", tint: "#1652f0" },

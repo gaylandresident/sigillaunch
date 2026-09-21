@@ -48,10 +48,11 @@ function bindMessage(params: {
 export const attest = new Hono();
 
 const evmClients = {
-  ethereum: createPublicClient({ transport: http(config.chains.ethereum.rpcUrl) }),
-  base: createPublicClient({ transport: http(config.chains.base.rpcUrl) }),
-  bsc: createPublicClient({ transport: http(config.chains.bsc.rpcUrl) }),
-  arbitrum: createPublicClient({ transport: http(config.chains.arbitrum.rpcUrl) }),
+  ethereum:  createPublicClient({ transport: http(config.chains.ethereum.rpcUrl) }),
+  base:      createPublicClient({ transport: http(config.chains.base.rpcUrl) }),
+  bsc:       createPublicClient({ transport: http(config.chains.bsc.rpcUrl) }),
+  arbitrum:  createPublicClient({ transport: http(config.chains.arbitrum.rpcUrl) }),
+  robinhood: createPublicClient({ transport: http(config.chains.robinhood.rpcUrl) }),
 };
 
 const SOURCE_CHAIN_IDS = {
@@ -60,6 +61,7 @@ const SOURCE_CHAIN_IDS = {
   base: 2,
   bsc: 3,
   arbitrum: 4,
+  robinhood: 6,
 } as const;
 
 attest.post("/", async (c) => {
@@ -77,31 +79,40 @@ attest.post("/", async (c) => {
     return c.json({ error: "bindSignature and recipient are required" }, 400);
   }
 
-  // De-dupe: one attestation per burn tx
-  const [existing] = await sql`
-    SELECT burn_tx_hash FROM burn_attestations WHERE burn_tx_hash=${body.burnTxHash}
-  `;
-  if (existing) return c.json({ error: "already attested" }, 409);
+  // De-dupe check — best effort. Contract's `claimed[burnTxHash]` mapping is
+  // the real safety net; this DB check is only to give a nicer error message.
+  try {
+    const [existing] = await sql`
+      SELECT burn_tx_hash FROM burn_attestations WHERE burn_tx_hash=${body.burnTxHash}
+    `;
+    if (existing) return c.json({ error: "already attested" }, 409);
+  } catch {}
 
-  // Resolve block + timestamp on source chain
+  // Resolve block + timestamp on source chain (safely — malformed hashes
+  // must return 4xx, not 5xx)
   let burnBlock: bigint;
   let unixTs: number;
-  if (body.sourceChain === "solana") {
-    const { Connection } = await import("@solana/web3.js");
-    const conn = new Connection(config.chains.solana.rpcUrl, "confirmed");
-    const tx = await conn.getParsedTransaction(body.burnTxHash, {
-      maxSupportedTransactionVersion: 0,
-    });
-    if (!tx) return c.json({ error: "solana tx not found" }, 404);
-    burnBlock = BigInt(tx.slot);
-    unixTs = tx.blockTime ?? Math.floor(Date.now() / 1000);
-  } else {
-    const client = evmClients[body.sourceChain];
-    const receipt = await client.getTransactionReceipt({ hash: body.burnTxHash });
-    if (!receipt) return c.json({ error: "burn tx not found" }, 404);
-    const block = await client.getBlock({ blockNumber: receipt.blockNumber });
-    burnBlock = receipt.blockNumber;
-    unixTs = Number(block.timestamp);
+  try {
+    if (body.sourceChain === "solana") {
+      const { Connection } = await import("@solana/web3.js");
+      const conn = new Connection(config.chains.solana.rpcUrl, "confirmed");
+      const tx = await conn.getParsedTransaction(body.burnTxHash, {
+        maxSupportedTransactionVersion: 0,
+      });
+      if (!tx) return c.json({ error: "solana tx not found" }, 404);
+      burnBlock = BigInt(tx.slot);
+      unixTs = tx.blockTime ?? Math.floor(Date.now() / 1000);
+    } else {
+      const client = evmClients[body.sourceChain];
+      if (!client) return c.json({ error: `unsupported chain: ${body.sourceChain}` }, 400);
+      const receipt = await client.getTransactionReceipt({ hash: body.burnTxHash });
+      if (!receipt) return c.json({ error: "burn tx not found" }, 404);
+      const block = await client.getBlock({ blockNumber: receipt.blockNumber });
+      burnBlock = receipt.blockNumber;
+      unixTs = Number(block.timestamp);
+    }
+  } catch (e: any) {
+    return c.json({ error: `could not resolve burn tx: ${e?.shortMessage ?? e?.message ?? e}` }, 400);
   }
 
   const amount = BigInt(body.amount);
@@ -159,21 +170,23 @@ attest.post("/", async (c) => {
   // ── ECDSA attestation for the on-chain BurnRegistry.claim() ──
   const { attestation, attester, digest } = await signAttestation(claim);
 
-  await sql`
-    INSERT INTO burn_attestations (
-      burn_tx_hash, source_chain, source_token, burner, amount,
-      usd_value_at_burn, burn_block, attestation_sig
-    ) VALUES (
-      ${body.burnTxHash},
-      ${SOURCE_CHAIN_IDS[body.sourceChain]},
-      ${body.sourceToken},
-      ${body.burner},
-      ${amount.toString()},
-      ${usdValueAtBurn.toString()},
-      ${burnBlock.toString()},
-      ${attestation}
-    )
-  `;
+  try {
+    await sql`
+      INSERT INTO burn_attestations (
+        burn_tx_hash, source_chain, source_token, burner, amount,
+        usd_value_at_burn, burn_block, attestation_sig
+      ) VALUES (
+        ${body.burnTxHash},
+        ${SOURCE_CHAIN_IDS[body.sourceChain]},
+        ${body.sourceToken},
+        ${body.burner},
+        ${amount.toString()},
+        ${usdValueAtBurn.toString()},
+        ${burnBlock.toString()},
+        ${attestation}
+      )
+    `;
+  } catch {}
 
   return c.json({
     attestation,

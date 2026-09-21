@@ -1,10 +1,10 @@
 export const CONTRACTS = {
-  burnRegistry:  (process.env.NEXT_PUBLIC_BURN_REGISTRY   ?? "0xe8e62d05f51937647698658f03dfca7e246a43a1") as `0x${string}`,
-  certificate:   (process.env.NEXT_PUBLIC_CERTIFICATE     ?? "0x97d3caec8e581e95d6b1b15e1ead77cd6fac20bc") as `0x${string}`,
-  launchpad:     (process.env.NEXT_PUBLIC_LAUNCHPAD       ?? "0x86c16a2b955be9c779f2691482d3a9af52089a73") as `0x${string}`,
-  vault:         (process.env.NEXT_PUBLIC_VAULT           ?? "0xef611f115764182a318a0dd22e3d4ea4ea4cea87") as `0x${string}`,
+  burnRegistry:  (process.env.NEXT_PUBLIC_BURN_REGISTRY   ?? "0x0e053063132b90b9a98efc4846968f24c11061cd") as `0x${string}`,
+  certificate:   (process.env.NEXT_PUBLIC_CERTIFICATE     ?? "0xf6f842d392dd776ba7e8f6c46804aff9fe05e4af") as `0x${string}`,
+  launchpad:     (process.env.NEXT_PUBLIC_LAUNCHPAD       ?? "0xb82d1356e77e301041add2ef53bbcaf428b5be53") as `0x${string}`,
+  vault:         (process.env.NEXT_PUBLIC_VAULT           ?? "0x46ab4f6ad1bfda11385cda92adee20d1d5dbc751") as `0x${string}`,
   weth:          (process.env.NEXT_PUBLIC_WETH            ?? "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73") as `0x${string}`,
-  dividendRouter:(process.env.NEXT_PUBLIC_DIVIDEND_ROUTER ?? "0xdef6ccaa27b736aea644f2d6069b1fdae34ad302") as `0x${string}`,
+  dividendRouter:(process.env.NEXT_PUBLIC_DIVIDEND_ROUTER ?? "0x820d755f4ab29125324df01d7aecedf7adf1c98d") as `0x${string}`,
   sigilToken:    (process.env.NEXT_PUBLIC_SIGIL_TOKEN     ?? "0xfb14980438acc1cdfc45f7de6420c27ef4cc846f") as `0x${string}`,
 };
 

@@ -43,10 +43,11 @@ const erc20TransferAbi = parseAbi([
 ]);
 
 const evmClients: Record<Exclude<SourceChain, "solana">, ReturnType<typeof createPublicClient>> = {
-  ethereum: createPublicClient({ transport: http(config.chains.ethereum.rpcUrl) }),
-  base: createPublicClient({ transport: http(config.chains.base.rpcUrl) }),
-  bsc: createPublicClient({ transport: http(config.chains.bsc.rpcUrl) }),
-  arbitrum: createPublicClient({ transport: http(config.chains.arbitrum.rpcUrl) }),
+  ethereum:  createPublicClient({ transport: http(config.chains.ethereum.rpcUrl) }),
+  base:      createPublicClient({ transport: http(config.chains.base.rpcUrl) }),
+  bsc:       createPublicClient({ transport: http(config.chains.bsc.rpcUrl) }),
+  arbitrum:  createPublicClient({ transport: http(config.chains.arbitrum.rpcUrl) }),
+  robinhood: createPublicClient({ transport: http(config.chains.robinhood.rpcUrl) }),
 };
 
 const solanaConn = new Connection(config.chains.solana.rpcUrl, "confirmed");

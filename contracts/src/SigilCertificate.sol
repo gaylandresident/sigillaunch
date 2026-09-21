@@ -19,7 +19,8 @@ contract SigilCertificate is ERC721Enumerable, Ownable {
         BASE,
         BSC,
         ARBITRUM,
-        PROTOCOL  // self-burn by DividendRouter — funded by fee buybacks, auto-staked
+        PROTOCOL,   // self-burn by DividendRouter — funded by fee buybacks, auto-staked
+        ROBINHOOD   // burns done natively on Robinhood Chain (same-chain, cheapest)
     }
 
     enum Rarity {

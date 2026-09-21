@@ -10,7 +10,7 @@ export function ChainPicker({
   onChange: (id: BurnChainId) => void;
 }) {
   return (
-    <div className="grid grid-cols-5 gap-px bg-bone-600/30">
+    <div className="grid grid-cols-3 gap-px bg-bone-600/30 sm:grid-cols-6">
       {SUPPORTED_BURN_CHAINS.map((c) => {
         const active = value === c.id;
         return (
