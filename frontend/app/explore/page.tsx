@@ -6,33 +6,54 @@ import { motion } from "framer-motion";
 import { formatEther } from "viem";
 import { CONTRACTS, launchpadAbi } from "@/lib/contracts";
 
+const LEGACY_LAUNCHPAD = "0x86c16a2b955be9c779f2691482d3a9af52089a73" as `0x${string}`;
+
 export default function ExplorePage() {
-  const { data: count } = useReadContract({
+  // Read both launchpads and merge
+  const { data: countNew } = useReadContract({
     address: CONTRACTS.launchpad,
     abi: launchpadAbi,
     functionName: "launchCount",
   });
+  const { data: countLegacy } = useReadContract({
+    address: LEGACY_LAUNCHPAD,
+    abi: launchpadAbi,
+    functionName: "launchCount",
+  });
 
-  const total = Number(count ?? 0n);
+  const totalNew = Number(countNew ?? 0n);
+  const totalLegacy = Number(countLegacy ?? 0n);
+  const total = totalNew + totalLegacy;
 
-  const { data: ids } = useReadContract({
+  const { data: idsNew } = useReadContract({
     address: CONTRACTS.launchpad,
     abi: launchpadAbi,
     functionName: "paginatedLaunches",
     args: [0n, 60n],
-    query: { enabled: total > 0 },
+    query: { enabled: totalNew > 0 },
+  });
+  const { data: idsLegacy } = useReadContract({
+    address: LEGACY_LAUNCHPAD,
+    abi: launchpadAbi,
+    functionName: "paginatedLaunches",
+    args: [0n, 60n],
+    query: { enabled: totalLegacy > 0 },
   });
 
-  const launchIds = (ids as `0x${string}`[] | undefined) ?? [];
+  const merged: { id: `0x${string}`; pad: `0x${string}` }[] = [
+    ...(((idsNew as `0x${string}`[] | undefined) ?? []).map((id) => ({ id, pad: CONTRACTS.launchpad }))),
+    ...(((idsLegacy as `0x${string}`[] | undefined) ?? []).map((id) => ({ id, pad: LEGACY_LAUNCHPAD }))),
+  ];
+  const launchIds = merged.map((m) => m.id);
 
   const { data: launchData } = useReadContracts({
-    contracts: launchIds.map((id) => ({
-      address: CONTRACTS.launchpad,
+    contracts: merged.map((m) => ({
+      address: m.pad,
       abi: launchpadAbi,
-      functionName: "launches",
-      args: [id],
+      functionName: "launches" as const,
+      args: [m.id] as const,
     })),
-    query: { enabled: launchIds.length > 0 },
+    query: { enabled: merged.length > 0 },
   });
 
   return (

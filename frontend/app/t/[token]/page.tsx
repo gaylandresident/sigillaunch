@@ -112,12 +112,11 @@ export default function TokenPage() {
   const marketCapEth =
     tokenReserve > 0n ? (wethReserve * 1_000_000_000n * 10n ** 18n) / tokenReserve / 10n ** 18n : 0n;
 
-  // Live quote for the amount entered
-  const quote = useMemo(() => {
+  // Live quote for the amount entered — plain function, no hooks (we're past early returns)
+  const quote = (() => {
     try {
       const inputWei = parseEther(amount || "0");
       if (inputWei === 0n) return null;
-      // constant product k = tokenReserve * wethReserve
       const k = tokenReserve * wethReserve;
       if (mode === "buy") {
         const fee = (inputWei * 100n) / 10000n; // 1% fee
@@ -136,7 +135,7 @@ export default function TokenPage() {
     } catch {
       return null;
     }
-  }, [amount, mode, tokenReserve, wethReserve, meta.symbol]);
+  })();
 
   async function submit() {
     if (!address || !launchId) return;
